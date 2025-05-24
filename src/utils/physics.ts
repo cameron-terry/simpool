@@ -148,16 +148,35 @@ export function getRandomVelocity(ballSpeed: number) {
   };
 }
 
-export function predictCollisions(
+// Add new type for recursive collision prediction
+export type PredictedCollision = {
+  x: number;
+  y: number;
+  distance: number;
+  collidedBallId: number;
+  collidedBallTrajectory: {
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+  };
+};
+
+type CollisionChain = {
+  collision: PredictedCollision;
+  subsequentCollisions: CollisionChain[];
+};
+
+function predictSubsequentCollisions(
   ball: PoolBall,
   otherBalls: PoolBall[],
-  angle: number,
+  vx: number,
+  vy: number,
   velocity: number,
-  ballRadius: number
-): PredictedCollision[] {
-  const angleRad = (angle * Math.PI) / 180;
-  const vx = Math.cos(angleRad) * velocity;
-  const vy = Math.sin(angleRad) * velocity;
+  ballRadius: number,
+  maxDepth: number = 3
+): CollisionChain[] {
+  if (maxDepth <= 0) return [];
 
   const collisions = otherBalls
     .filter((other) => other.id !== ball.id)
@@ -225,7 +244,7 @@ export function predictCollisions(
       const newVy = normalVelocity * normalY;
 
       // Calculate the trajectory line for the collided ball
-      const trajectoryLength = 20; // Same as the original trajectory line
+      const trajectoryLength = 20;
       const collidedBallTrajectory = {
         x1: collisionX,
         y1: collisionY,
@@ -241,11 +260,67 @@ export function predictCollisions(
         collidedBallTrajectory,
       };
 
-      return collision;
-    })
-    .filter((collision): collision is PredictedCollision => collision !== null);
+      // Create a new ball at the collision point with the new velocity
+      const collidedBall: PoolBall = {
+        ...other,
+        x: collisionX,
+        y: collisionY,
+        vx: newVx,
+        vy: newVy,
+      };
 
-  return collisions.sort((a, b) => a.distance - b.distance);
+      // Recursively predict subsequent collisions
+      const subsequentCollisions = predictSubsequentCollisions(
+        collidedBall,
+        otherBalls.filter((b) => b.id !== other.id),
+        newVx,
+        newVy,
+        velocity,
+        ballRadius,
+        maxDepth - 1
+      );
+
+      return {
+        collision,
+        subsequentCollisions,
+      };
+    })
+    .filter((chain): chain is CollisionChain => chain !== null);
+
+  return collisions.sort((a, b) => a.collision.distance - b.collision.distance);
+}
+
+export function predictCollisions(
+  ball: PoolBall,
+  otherBalls: PoolBall[],
+  angle: number,
+  velocity: number,
+  ballRadius: number
+): PredictedCollision[] {
+  const angleRad = (angle * Math.PI) / 180;
+  const vx = Math.cos(angleRad) * velocity;
+  const vy = Math.sin(angleRad) * velocity;
+
+  // Get the collision chain
+  const collisionChains = predictSubsequentCollisions(
+    ball,
+    otherBalls,
+    vx,
+    vy,
+    velocity,
+    ballRadius
+  );
+
+  // Flatten the collision chain into a single array of collisions
+  const flattenCollisions = (chain: CollisionChain): PredictedCollision[] => {
+    const collisions = [chain.collision];
+    chain.subsequentCollisions.forEach((subChain) => {
+      collisions.push(...flattenCollisions(subChain));
+    });
+    return collisions;
+  };
+
+  return collisionChains.flatMap(flattenCollisions);
 }
 
 // Calculate positions for a standard 8-ball rack

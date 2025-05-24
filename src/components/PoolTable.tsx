@@ -15,8 +15,8 @@ import {
 import '../styles/PoolTable.css';
 
 // Add these constants before the PoolTable component
-const CORNER_POCKET_RADIUS = 6; // Larger radius for corner pockets
-const MIDDLE_POCKET_RADIUS = 4; // Smaller radius for middle pockets
+const CORNER_POCKET_RADIUS = 8;
+const MIDDLE_POCKET_RADIUS = 4;
 
 // Update the PredictedCollision type to make collidedBallTrajectory required
 type PredictedCollision = {
