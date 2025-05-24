@@ -35,12 +35,11 @@ export interface PhysicsState {
   ballSpeed: number;
 }
 
-export interface ShotState {
+export type ShotState = {
   selectedBall: number | null;
   shotAngle: number;
   shotVelocity: number;
-  trajectoryLine: TrajectoryLine | null;
-}
+};
 
 export interface BallCreationState {
   newBallNumber: number;

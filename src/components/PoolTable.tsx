@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Ball } from './Ball';
 import { ControlPanel } from './ControlPanel';
+import { TrajectoryVisualization } from './TrajectoryVisualization';
 import type { PoolBall, PhysicsState, ShotState, BallCreationState } from '../types/pool';
 import { POCKETS, DEFAULT_PHYSICS, DEFAULT_SHOT, POOL_BALL_COLORS } from '../config/pool';
 import {
@@ -12,6 +13,137 @@ import {
   getRandomVelocity,
 } from '../utils/physics';
 import '../styles/PoolTable.css';
+
+// Add these constants before the PoolTable component
+const CORNER_POCKET_RADIUS = 6; // Larger radius for corner pockets
+const MIDDLE_POCKET_RADIUS = 4; // Smaller radius for middle pockets
+
+// Update the PredictedCollision type to make collidedBallTrajectory required
+type PredictedCollision = {
+  x: number;
+  y: number;
+  distance: number;
+  collidedBallId: number;
+  collidedBallTrajectory: {
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+  };
+};
+
+const isBallInPocket = (ball: PoolBall, pocket: { x: number; y: number }): boolean => {
+  // Determine if this is a corner pocket (x and y are at 0 or 100)
+  const isCornerPocket =
+    (pocket.x === 0 || pocket.x === 100) && (pocket.y === 0 || pocket.y === 100);
+  const pocketRadius = isCornerPocket ? CORNER_POCKET_RADIUS : MIDDLE_POCKET_RADIUS;
+
+  const dx = ball.x - pocket.x;
+  const dy = ball.y - pocket.y;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  return distance < pocketRadius;
+};
+
+// Add function to predict collisions
+const predictCollisions = (
+  ball: PoolBall,
+  otherBalls: PoolBall[],
+  angle: number,
+  velocity: number,
+  ballRadius: number
+): PredictedCollision[] => {
+  const angleRad = (angle * Math.PI) / 180;
+  const vx = Math.cos(angleRad) * velocity;
+  const vy = Math.sin(angleRad) * velocity;
+
+  const collisions = otherBalls
+    .filter((other) => other.id !== ball.id)
+    .map((other) => {
+      // Calculate time until collision using quadratic formula
+      const dx = other.x - ball.x;
+      const dy = other.y - ball.y;
+
+      // Calculate the relative position vector
+      const relativeX = dx;
+      const relativeY = dy;
+
+      // Calculate the dot product of velocity and relative position
+      const dotProduct = vx * relativeX + vy * relativeY;
+
+      // If dot product is negative, the ball is moving away from the other ball
+      if (dotProduct <= 0) return null;
+
+      // Calculate the closest approach distance
+      const relativeSpeedSquared = vx * vx + vy * vy;
+      const closestApproachDistance = Math.abs(
+        (relativeX * vy - relativeY * vx) / Math.sqrt(relativeSpeedSquared)
+      );
+
+      // If closest approach is greater than 2 * ballRadius, no collision will occur
+      if (closestApproachDistance > ballRadius * 2) return null;
+
+      // Calculate the time until collision
+      const distanceSquared = dx * dx + dy * dy;
+      const collisionDistanceSquared = ballRadius * 2 * (ballRadius * 2);
+
+      // Calculate the time using the quadratic formula
+      const a = relativeSpeedSquared;
+      const b = -2 * dotProduct;
+      const c = distanceSquared - collisionDistanceSquared;
+
+      const discriminant = b * b - 4 * a * c;
+      if (discriminant < 0) return null;
+
+      const t = (-b - Math.sqrt(discriminant)) / (2 * a);
+      if (t < 0) return null;
+
+      // Calculate the collision point
+      const collisionX = ball.x + vx * t;
+      const collisionY = ball.y + vy * t;
+
+      // Verify the collision point is in the correct direction
+      const collisionDx = collisionX - ball.x;
+      const collisionDy = collisionY - ball.y;
+      const collisionDotProduct = vx * collisionDx + vy * collisionDy;
+
+      if (collisionDotProduct <= 0) return null;
+
+      // Calculate the collided ball's trajectory
+      const normalX = (collisionX - other.x) / (ballRadius * 2);
+      const normalY = (collisionY - other.y) / (ballRadius * 2);
+
+      // Calculate the velocity transfer using elastic collision
+      const relativeVelocityX = vx;
+      const relativeVelocityY = vy;
+      const normalVelocity = relativeVelocityX * normalX + relativeVelocityY * normalY;
+
+      // Calculate the new velocity for the collided ball
+      const newVx = normalVelocity * normalX;
+      const newVy = normalVelocity * normalY;
+
+      // Calculate the trajectory line for the collided ball
+      const trajectoryLength = 20; // Same as the original trajectory line
+      const collidedBallTrajectory = {
+        x1: collisionX,
+        y1: collisionY,
+        x2: collisionX + (newVx * trajectoryLength) / velocity,
+        y2: collisionY + (newVy * trajectoryLength) / velocity,
+      };
+
+      const collision: PredictedCollision = {
+        x: collisionX,
+        y: collisionY,
+        distance: t * velocity,
+        collidedBallId: other.id,
+        collidedBallTrajectory,
+      };
+
+      return collision;
+    })
+    .filter((collision): collision is PredictedCollision => collision !== null);
+
+  return collisions.sort((a, b) => a.distance - b.distance);
+};
 
 export function PoolTable() {
   // State management
@@ -26,7 +158,6 @@ export function PoolTable() {
   const [shot, setShot] = useState<ShotState>({
     ...DEFAULT_SHOT,
     selectedBall: null,
-    trajectoryLine: null,
   });
 
   // Ball creation state
@@ -36,11 +167,20 @@ export function PoolTable() {
     nextBallId: 1,
   });
 
+  // Predicted collisions
+  const [predictedCollisions, setPredictedCollisions] = useState<PredictedCollision[]>([]);
+
   // Physics update loop
   useEffect(() => {
     const updatePhysics = () => {
       setBalls((currentBalls) => {
-        let newBalls = updateBallPositions(currentBalls, physics.friction);
+        // First check for pocketed balls and remove them
+        let newBalls = currentBalls.filter(
+          (ball) => !POCKETS.some((pocket) => isBallInPocket(ball, pocket))
+        );
+
+        // Then update remaining balls
+        newBalls = updateBallPositions(newBalls, physics.friction);
         newBalls = handleWallCollisions(newBalls, physics.tableMargin, physics.ballRadius);
         newBalls = handleBallCollisions(newBalls, physics.ballRadius);
         return newBalls;
@@ -63,15 +203,20 @@ export function PoolTable() {
     if (shot.selectedBall !== null) {
       const ball = balls.find((b) => b.id === shot.selectedBall);
       if (ball) {
-        setShot((prev) => ({
-          ...prev,
-          trajectoryLine: calculateTrajectoryLine(ball, shot.shotAngle, 20),
-        }));
+        // Calculate predicted collisions
+        const collisions = predictCollisions(
+          ball,
+          balls,
+          shot.shotAngle,
+          shot.shotVelocity,
+          physics.ballRadius
+        );
+        setPredictedCollisions(collisions);
       }
     } else {
-      setShot((prev) => ({ ...prev, trajectoryLine: null }));
+      setPredictedCollisions([]);
     }
-  }, [shot.selectedBall, shot.shotAngle, balls]);
+  }, [shot.selectedBall, shot.shotAngle, shot.shotVelocity, balls, physics.ballRadius]);
 
   // Event handlers
   const handlePhysicsChange = (key: keyof PhysicsState, value: number) => {
@@ -192,28 +337,13 @@ export function PoolTable() {
             }}
           />
         ))}
-        {shot.trajectoryLine && (
-          <svg
-            className="trajectory-line"
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              pointerEvents: 'none',
-            }}
-          >
-            <line
-              x1={`${shot.trajectoryLine.x1}%`}
-              y1={`${shot.trajectoryLine.y1}%`}
-              x2={`${shot.trajectoryLine.x2}%`}
-              y2={`${shot.trajectoryLine.y2}%`}
-              stroke="black"
-              strokeWidth="2"
-              strokeDasharray="5,5"
-            />
-          </svg>
+        {shot.selectedBall !== null && (
+          <TrajectoryVisualization
+            selectedBall={balls.find((b) => b.id === shot.selectedBall) || null}
+            balls={balls}
+            shot={shot}
+            physics={physics}
+          />
         )}
         {balls.map((ball) => (
           <Ball

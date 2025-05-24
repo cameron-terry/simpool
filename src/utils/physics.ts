@@ -1,4 +1,5 @@
 import type { PoolBall } from '../types/pool';
+import type { PredictedCollision, TrajectoryLine } from '../types/physics';
 import { COLLISION_THRESHOLD } from '../config/pool';
 
 export function updateBallPositions(balls: PoolBall[], friction: number): PoolBall[] {
@@ -102,7 +103,7 @@ export function calculateTrajectoryLine(
   ball: PoolBall,
   angle: number,
   lineLength: number
-): { x1: number; y1: number; x2: number; y2: number } {
+): TrajectoryLine {
   const angleRad = (angle * Math.PI) / 180;
   return {
     x1: ball.x,
@@ -125,4 +126,104 @@ export function getRandomVelocity(ballSpeed: number) {
     vx: Math.cos(angle) * ballSpeed,
     vy: Math.sin(angle) * ballSpeed,
   };
+}
+
+export function predictCollisions(
+  ball: PoolBall,
+  otherBalls: PoolBall[],
+  angle: number,
+  velocity: number,
+  ballRadius: number
+): PredictedCollision[] {
+  const angleRad = (angle * Math.PI) / 180;
+  const vx = Math.cos(angleRad) * velocity;
+  const vy = Math.sin(angleRad) * velocity;
+
+  const collisions = otherBalls
+    .filter((other) => other.id !== ball.id)
+    .map((other) => {
+      // Calculate time until collision using quadratic formula
+      const dx = other.x - ball.x;
+      const dy = other.y - ball.y;
+
+      // Calculate the relative position vector
+      const relativeX = dx;
+      const relativeY = dy;
+
+      // Calculate the dot product of velocity and relative position
+      const dotProduct = vx * relativeX + vy * relativeY;
+
+      // If dot product is negative, the ball is moving away from the other ball
+      if (dotProduct <= 0) return null;
+
+      // Calculate the closest approach distance
+      const relativeSpeedSquared = vx * vx + vy * vy;
+      const closestApproachDistance = Math.abs(
+        (relativeX * vy - relativeY * vx) / Math.sqrt(relativeSpeedSquared)
+      );
+
+      // If closest approach is greater than 2 * ballRadius, no collision will occur
+      if (closestApproachDistance > ballRadius * 2) return null;
+
+      // Calculate the time until collision
+      const distanceSquared = dx * dx + dy * dy;
+      const collisionDistanceSquared = ballRadius * 2 * (ballRadius * 2);
+
+      // Calculate the time using the quadratic formula
+      const a = relativeSpeedSquared;
+      const b = -2 * dotProduct;
+      const c = distanceSquared - collisionDistanceSquared;
+
+      const discriminant = b * b - 4 * a * c;
+      if (discriminant < 0) return null;
+
+      const t = (-b - Math.sqrt(discriminant)) / (2 * a);
+      if (t < 0) return null;
+
+      // Calculate the collision point
+      const collisionX = ball.x + vx * t;
+      const collisionY = ball.y + vy * t;
+
+      // Verify the collision point is in the correct direction
+      const collisionDx = collisionX - ball.x;
+      const collisionDy = collisionY - ball.y;
+      const collisionDotProduct = vx * collisionDx + vy * collisionDy;
+
+      if (collisionDotProduct <= 0) return null;
+
+      // Calculate the collided ball's trajectory
+      const normalX = (collisionX - other.x) / (ballRadius * 2);
+      const normalY = (collisionY - other.y) / (ballRadius * 2);
+
+      // Calculate the velocity transfer using elastic collision
+      const relativeVelocityX = vx;
+      const relativeVelocityY = vy;
+      const normalVelocity = relativeVelocityX * normalX + relativeVelocityY * normalY;
+
+      // Calculate the new velocity for the collided ball
+      const newVx = normalVelocity * normalX;
+      const newVy = normalVelocity * normalY;
+
+      // Calculate the trajectory line for the collided ball
+      const trajectoryLength = 20; // Same as the original trajectory line
+      const collidedBallTrajectory = {
+        x1: collisionX,
+        y1: collisionY,
+        x2: collisionX + (newVx * trajectoryLength) / velocity,
+        y2: collisionY + (newVy * trajectoryLength) / velocity,
+      };
+
+      const collision: PredictedCollision = {
+        x: collisionX,
+        y: collisionY,
+        distance: t * velocity,
+        collidedBallId: other.id,
+        collidedBallTrajectory,
+      };
+
+      return collision;
+    })
+    .filter((collision): collision is PredictedCollision => collision !== null);
+
+  return collisions.sort((a, b) => a.distance - b.distance);
 }
