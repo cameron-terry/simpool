@@ -17,9 +17,12 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+
+    /* React */
+    "jsx": "react-jsx",
+    "types": ["react", "react-dom"]
   },
   "include": ["src"]
 }
