@@ -11,7 +11,10 @@ interface TrajectoryVisualizationProps {
 }
 
 // Helper function to generate a color based on collision index
-const getCollisionColor = (index: number) => {
+const getCollisionColor = (index: number, isWallCollision: boolean = false) => {
+  if (isWallCollision) {
+    return 'rgba(255, 165, 0, 0.7)'; // Orange for wall collisions
+  }
   // Main ball path is red, deflected paths are different colors
   const colors = [
     'rgba(0, 128, 0, 0.7)', // Green for first deflection
@@ -36,11 +39,13 @@ export function TrajectoryVisualization({
     balls,
     shot.shotAngle,
     shot.shotVelocity,
-    physics.ballRadius
+    physics.ballRadius,
+    physics.tableMargin
   );
 
   // Get the final positions of all balls involved in collisions
   const getFinalPosition = (collision: PredictedCollision) => {
+    if (collision.isWallCollision) return null;
     const ball = balls.find((b) => b.id === collision.collidedBallId);
     if (!ball) return null;
     return {
@@ -84,7 +89,7 @@ export function TrajectoryVisualization({
       />
       {/* Predicted collision points and their trajectories */}
       {predictedCollisions.map((collision: PredictedCollision, index: number) => {
-        const collisionColor = getCollisionColor(index);
+        const collisionColor = getCollisionColor(index, collision.isWallCollision);
         const finalPosition = getFinalPosition(collision);
 
         return (
@@ -97,7 +102,7 @@ export function TrajectoryVisualization({
               fill="none"
               stroke={collisionColor}
               strokeWidth="2"
-              strokeDasharray="3,3"
+              strokeDasharray={collision.isWallCollision ? '1,1' : '3,3'}
             />
             {/* Collision number label */}
             <text
@@ -111,7 +116,7 @@ export function TrajectoryVisualization({
                 textShadow: '0 0 2px rgba(255, 255, 255, 0.8)',
               }}
             >
-              {index + 1}
+              {collision.isWallCollision ? 'W' : index + 1}
             </text>
             {/* Collided ball's trajectory */}
             <line
@@ -121,7 +126,7 @@ export function TrajectoryVisualization({
               y2={`${collision.collidedBallTrajectory.y2}%`}
               stroke={collisionColor}
               strokeWidth="2"
-              strokeDasharray="5,5"
+              strokeDasharray={collision.isWallCollision ? '2,2' : '5,5'}
             />
             {/* Final position marker for collided ball */}
             {finalPosition && (

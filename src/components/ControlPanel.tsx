@@ -132,9 +132,9 @@ export function ControlPanel({
           <label>Angle: {shot.shotAngle.toFixed(1)}°</label>
           <input
             type="range"
-            min="0"
+            min="-360"
             max="360"
-            step="0.5"
+            step="0.1"
             value={shot.shotAngle}
             onChange={(e) => onShotChange('shotAngle', Number(e.target.value))}
           />

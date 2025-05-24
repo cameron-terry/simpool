@@ -23,13 +23,14 @@ type PredictedCollision = {
   x: number;
   y: number;
   distance: number;
-  collidedBallId: number;
+  collidedBallId: number | null;
   collidedBallTrajectory: {
     x1: number;
     y1: number;
     x2: number;
     y2: number;
   };
+  isWallCollision: boolean;
 };
 
 const isBallInPocket = (ball: PoolBall, pocket: { x: number; y: number }): boolean => {
@@ -50,13 +51,106 @@ const predictCollisions = (
   otherBalls: PoolBall[],
   angle: number,
   velocity: number,
-  ballRadius: number
+  ballRadius: number,
+  tableMargin: number
 ): PredictedCollision[] => {
   const angleRad = (angle * Math.PI) / 180;
   const vx = Math.cos(angleRad) * velocity;
   const vy = Math.sin(angleRad) * velocity;
 
-  const collisions = otherBalls
+  // Calculate wall collisions
+  const wallCollisions: PredictedCollision[] = [];
+
+  // Check horizontal walls (top and bottom)
+  if (vy !== 0) {
+    const timeToTopWall = (tableMargin - ball.y + ballRadius) / vy;
+    const timeToBottomWall = (100 - tableMargin - ball.y - ballRadius) / vy;
+
+    if (timeToTopWall > 0) {
+      const collisionX = ball.x + vx * timeToTopWall;
+      if (collisionX >= tableMargin && collisionX <= 100 - tableMargin) {
+        wallCollisions.push({
+          x: collisionX,
+          y: tableMargin - ballRadius,
+          distance: timeToTopWall * velocity,
+          collidedBallId: null,
+          collidedBallTrajectory: {
+            x1: collisionX,
+            y1: tableMargin - ballRadius,
+            x2: collisionX + (vx * 20) / velocity,
+            y2: tableMargin - ballRadius - (vy * 20) / velocity,
+          },
+          isWallCollision: true,
+        });
+      }
+    }
+
+    if (timeToBottomWall > 0) {
+      const collisionX = ball.x + vx * timeToBottomWall;
+      if (collisionX >= tableMargin && collisionX <= 100 - tableMargin) {
+        wallCollisions.push({
+          x: collisionX,
+          y: 100 - tableMargin + ballRadius,
+          distance: timeToBottomWall * velocity,
+          collidedBallId: null,
+          collidedBallTrajectory: {
+            x1: collisionX,
+            y1: 100 - tableMargin + ballRadius,
+            x2: collisionX + (vx * 20) / velocity,
+            y2: 100 - tableMargin + ballRadius - (vy * 20) / velocity,
+          },
+          isWallCollision: true,
+        });
+      }
+    }
+  }
+
+  // Check vertical walls (left and right)
+  if (vx !== 0) {
+    const timeToLeftWall = (tableMargin - ball.x + ballRadius) / vx;
+    const timeToRightWall = (100 - tableMargin - ball.x - ballRadius) / vx;
+
+    if (timeToLeftWall > 0) {
+      const collisionY = ball.y + vy * timeToLeftWall;
+      if (collisionY >= tableMargin && collisionY <= 100 - tableMargin) {
+        wallCollisions.push({
+          x: tableMargin - ballRadius,
+          y: collisionY,
+          distance: timeToLeftWall * velocity,
+          collidedBallId: null,
+          collidedBallTrajectory: {
+            x1: tableMargin - ballRadius,
+            y1: collisionY,
+            x2: tableMargin - ballRadius - (vx * 20) / velocity,
+            y2: collisionY + (vy * 20) / velocity,
+          },
+          isWallCollision: true,
+        });
+      }
+    }
+
+    if (timeToRightWall > 0) {
+      const collisionY = ball.y + vy * timeToRightWall;
+      if (collisionY >= tableMargin && collisionY <= 100 - tableMargin) {
+        wallCollisions.push({
+          x: 100 - tableMargin + ballRadius,
+          y: collisionY,
+          distance: timeToRightWall * velocity,
+          collidedBallId: null,
+          collidedBallTrajectory: {
+            x1: 100 - tableMargin + ballRadius,
+            y1: collisionY,
+            x2: 100 - tableMargin + ballRadius - (vx * 20) / velocity,
+            y2: collisionY + (vy * 20) / velocity,
+          },
+          isWallCollision: true,
+        });
+      }
+    }
+  }
+
+  // Get ball collisions as before
+  const ballCollisions = otherBalls
     .filter((other) => other.id !== ball.id)
     .map((other) => {
       // Calculate time until collision using quadratic formula
@@ -136,13 +230,15 @@ const predictCollisions = (
         distance: t * velocity,
         collidedBallId: other.id,
         collidedBallTrajectory,
+        isWallCollision: false,
       };
 
       return collision;
     })
     .filter((collision): collision is PredictedCollision => collision !== null);
 
-  return collisions.sort((a, b) => a.distance - b.distance);
+  // Combine and sort all collisions by distance
+  return [...wallCollisions, ...ballCollisions].sort((a, b) => a.distance - b.distance);
 };
 
 export function PoolTable() {
@@ -216,10 +312,24 @@ export function PoolTable() {
       const ball = balls.find((b) => b.id === shot.selectedBall);
       if (ball) {
         // Calculate predicted collisions for visualization
-        predictCollisions(ball, balls, shot.shotAngle, shot.shotVelocity, physics.ballRadius);
+        predictCollisions(
+          ball,
+          balls,
+          shot.shotAngle,
+          shot.shotVelocity,
+          physics.ballRadius,
+          physics.tableMargin
+        );
       }
     }
-  }, [shot.selectedBall, shot.shotAngle, shot.shotVelocity, balls, physics.ballRadius]);
+  }, [
+    shot.selectedBall,
+    shot.shotAngle,
+    shot.shotVelocity,
+    balls,
+    physics.ballRadius,
+    physics.tableMargin,
+  ]);
 
   // Event handlers
   const handlePhysicsChange = (key: keyof PhysicsState, value: number) => {
