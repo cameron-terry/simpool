@@ -58,6 +58,19 @@ export function PoolTable() {
     setNewBallNumber(newBallNumber + 1);
   };
 
+  const handleBallDrag = (ballId: number, newX: number, newY: number) => {
+    // Keep balls within table boundaries (with margin)
+    const margin = 5; // percentage from edges
+    const constrainedX = Math.max(margin, Math.min(100 - margin, newX));
+    const constrainedY = Math.max(margin, Math.min(100 - margin, newY));
+
+    setBalls(
+      balls.map((ball) =>
+        ball.id === ballId ? { ...ball, x: constrainedX, y: constrainedY } : ball
+      )
+    );
+  };
+
   return (
     <div className="pool-table-container">
       <div className="control-panel">
@@ -93,7 +106,14 @@ export function PoolTable() {
           />
         ))}
         {balls.map((ball) => (
-          <Ball key={ball.id} number={ball.number} color={ball.color} x={ball.x} y={ball.y} />
+          <Ball
+            key={ball.id}
+            number={ball.number}
+            color={ball.color}
+            x={ball.x}
+            y={ball.y}
+            onDrag={(x, y) => handleBallDrag(ball.id, x, y)}
+          />
         ))}
       </div>
     </div>
