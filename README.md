@@ -99,3 +99,53 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## License
 
 MIT License - feel free to use this project for any purpose.
+
+## GitHub Pages Deployment
+
+This project is configured for deployment to GitHub Pages. Here's what you need to know:
+
+### Development Rules
+
+1. **No Server-Side Code**: This project is designed to run entirely in the browser. Do not add server-side dependencies or code.
+2. **Static Assets**: All assets (images, sounds, etc.) should be stored in the `public` directory.
+3. **API Calls**: If you need to make API calls, use browser-compatible fetch or axios, and ensure the API endpoints are CORS-enabled.
+4. **State Management**: Use client-side state management (React state, context, or local storage) for data persistence.
+
+### Deployment
+
+The project automatically deploys to GitHub Pages when you push to the main branch. The deployment process:
+
+1. Builds the project using `npm run build`
+2. Deploys the contents of the `dist` directory to the `gh-pages` branch
+3. Makes the site available at `https://[your-username].github.io/simpool`
+
+### Manual Deployment
+
+If you need to deploy manually:
+
+```bash
+npm run deploy
+```
+
+### Local Development
+
+```bash
+npm run dev     # Start development server
+npm run build   # Build for production
+npm run preview # Preview production build
+```
+
+### Project Structure
+
+```
+simpool/
+├── src/              # Source files
+│   ├── components/   # React components
+│   ├── hooks/        # Custom React hooks
+│   ├── utils/        # Utility functions
+│   └── types/        # TypeScript type definitions
+├── public/           # Static assets
+├── dist/            # Build output (generated)
+└── .github/         # GitHub configuration
+    └── workflows/    # GitHub Actions workflows
+```
