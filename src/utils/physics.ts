@@ -1,6 +1,5 @@
 import type { PoolBall } from '../types/pool';
 import type { PredictedCollision, TrajectoryLine } from '../types/physics';
-import { COLLISION_THRESHOLD } from '../config/pool';
 
 export function updateBallPositions(balls: PoolBall[], friction: number): PoolBall[] {
   return balls.map((ball) => ({
@@ -43,19 +42,21 @@ export function handleWallCollisions(
 export function handleBallCollisions(balls: PoolBall[], ballRadius: number): PoolBall[] {
   const newBalls = [...balls];
   const minDist = ballRadius * 2;
-  const collisionDist = minDist * COLLISION_THRESHOLD;
 
   for (let i = 0; i < newBalls.length; i++) {
     for (let j = i + 1; j < newBalls.length; j++) {
       const b1 = newBalls[i];
       const b2 = newBalls[j];
 
+      // Skip collision between two racked balls
+      if (b1.racked && b2.racked) continue;
+
       const dx = b2.x - b1.x;
       const dy = b2.y - b1.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
-      // Handle collision response
-      if (dist < collisionDist) {
+      // Only handle collisions if balls are moving towards each other
+      if (dist < minDist) {
         const nx = dx / dist;
         const ny = dy / dist;
 
@@ -63,35 +64,54 @@ export function handleBallCollisions(balls: PoolBall[], ballRadius: number): Poo
         const dvy = b2.vy - b1.vy;
         const relativeVelocity = dvx * nx + dvy * ny;
 
+        // If balls are moving towards each other, handle collision
         if (relativeVelocity < 0) {
           const impulse = -relativeVelocity;
 
-          newBalls[i] = {
-            ...b1,
-            vx: b1.vx - impulse * nx,
-            vy: b1.vy - impulse * ny,
-          };
+          // If a racked ball is hit, unrack it
+          if (b1.racked) {
+            newBalls[i] = {
+              ...b1,
+              racked: false,
+              vx: b1.vx - impulse * nx,
+              vy: b1.vy - impulse * ny,
+            };
+          } else {
+            newBalls[i] = {
+              ...b1,
+              vx: b1.vx - impulse * nx,
+              vy: b1.vy - impulse * ny,
+            };
+          }
 
-          newBalls[j] = {
-            ...b2,
-            vx: b2.vx + impulse * nx,
-            vy: b2.vy + impulse * ny,
-          };
+          if (b2.racked) {
+            newBalls[j] = {
+              ...b2,
+              racked: false,
+              vx: b2.vx + impulse * nx,
+              vy: b2.vy + impulse * ny,
+            };
+          } else {
+            newBalls[j] = {
+              ...b2,
+              vx: b2.vx + impulse * nx,
+              vy: b2.vy + impulse * ny,
+            };
+          }
         }
-      }
 
-      // Handle overlap correction
-      if (dist < minDist) {
-        const nx = dx / dist;
-        const ny = dy / dist;
-        const overlap = (minDist - dist) / 2;
-        const separationX = nx * overlap;
-        const separationY = ny * overlap;
+        // Only separate non-racked balls
+        if (!b1.racked && !b2.racked && dist < minDist * 0.99) {
+          const overlap = (minDist - dist) / 2;
+          const separationX = nx * overlap;
+          const separationY = ny * overlap;
 
-        newBalls[i].x -= separationX;
-        newBalls[i].y -= separationY;
-        newBalls[j].x += separationX;
-        newBalls[j].y += separationY;
+          // Move balls apart
+          newBalls[i].x -= separationX;
+          newBalls[i].y -= separationY;
+          newBalls[j].x += separationX;
+          newBalls[j].y += separationY;
+        }
       }
     }
   }
@@ -226,4 +246,48 @@ export function predictCollisions(
     .filter((collision): collision is PredictedCollision => collision !== null);
 
   return collisions.sort((a, b) => a.distance - b.distance);
+}
+
+// Calculate positions for a standard 8-ball rack
+export function calculateRackPositions(
+  tableMargin: number,
+  ballRadius: number
+): { x: number; y: number }[] {
+  // The rack is positioned at 75% of the table length (from the left)
+  // and centered vertically
+  const rackCenterX = 75;
+  const rackCenterY = 50;
+
+  // The distance between ball centers (1.25 * radius for an even tighter rack)
+  const ballSpacing = ballRadius * 1.25;
+
+  // The positions for all 15 balls in a triangle formation
+  const positions: { x: number; y: number }[] = [];
+
+  // First row (1 ball)
+  positions.push({ x: rackCenterX, y: rackCenterY });
+
+  // Second row (2 balls)
+  positions.push({ x: rackCenterX + ballSpacing, y: rackCenterY - ballSpacing * 0.866 });
+  positions.push({ x: rackCenterX + ballSpacing, y: rackCenterY + ballSpacing * 0.866 });
+
+  // Third row (3 balls)
+  positions.push({ x: rackCenterX + ballSpacing * 2, y: rackCenterY - ballSpacing * 1.732 });
+  positions.push({ x: rackCenterX + ballSpacing * 2, y: rackCenterY });
+  positions.push({ x: rackCenterX + ballSpacing * 2, y: rackCenterY + ballSpacing * 1.732 });
+
+  // Fourth row (4 balls)
+  positions.push({ x: rackCenterX + ballSpacing * 3, y: rackCenterY - ballSpacing * 2.598 });
+  positions.push({ x: rackCenterX + ballSpacing * 3, y: rackCenterY - ballSpacing * 0.866 });
+  positions.push({ x: rackCenterX + ballSpacing * 3, y: rackCenterY + ballSpacing * 0.866 });
+  positions.push({ x: rackCenterX + ballSpacing * 3, y: rackCenterY + ballSpacing * 2.598 });
+
+  // Fifth row (5 balls)
+  positions.push({ x: rackCenterX + ballSpacing * 4, y: rackCenterY - ballSpacing * 3.464 });
+  positions.push({ x: rackCenterX + ballSpacing * 4, y: rackCenterY - ballSpacing * 1.732 });
+  positions.push({ x: rackCenterX + ballSpacing * 4, y: rackCenterY });
+  positions.push({ x: rackCenterX + ballSpacing * 4, y: rackCenterY + ballSpacing * 1.732 });
+  positions.push({ x: rackCenterX + ballSpacing * 4, y: rackCenterY + ballSpacing * 3.464 });
+
+  return positions;
 }

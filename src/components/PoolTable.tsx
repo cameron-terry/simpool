@@ -8,9 +8,9 @@ import {
   updateBallPositions,
   handleWallCollisions,
   handleBallCollisions,
-  calculateTrajectoryLine,
   getRandomPosition,
   getRandomVelocity,
+  calculateRackPositions,
 } from '../utils/physics';
 import '../styles/PoolTable.css';
 
@@ -149,6 +149,7 @@ export function PoolTable() {
   // State management
   const [balls, setBalls] = useState<PoolBall[]>([]);
   const [draggingEnabled, setDraggingEnabled] = useState<boolean>(true);
+  const [draggedBallId, setDraggedBallId] = useState<number | null>(null);
   const animationFrameRef = useRef<number | undefined>(undefined);
 
   // Physics state
@@ -167,9 +168,6 @@ export function PoolTable() {
     nextBallId: 1,
   });
 
-  // Predicted collisions
-  const [predictedCollisions, setPredictedCollisions] = useState<PredictedCollision[]>([]);
-
   // Physics update loop
   useEffect(() => {
     const updatePhysics = () => {
@@ -182,7 +180,21 @@ export function PoolTable() {
         // Then update remaining balls
         newBalls = updateBallPositions(newBalls, physics.friction);
         newBalls = handleWallCollisions(newBalls, physics.tableMargin, physics.ballRadius);
-        newBalls = handleBallCollisions(newBalls, physics.ballRadius);
+
+        // Only handle ball collisions if no ball is being dragged
+        if (draggedBallId === null) {
+          // Update racked state - if a ball moves, it's no longer racked
+          newBalls = newBalls.map((ball) => {
+            if (ball.racked && (Math.abs(ball.vx) > 0.01 || Math.abs(ball.vy) > 0.01)) {
+              return { ...ball, racked: false };
+            }
+            return ball;
+          });
+
+          // Only handle collisions between non-racked balls or when a racked ball is hit
+          newBalls = handleBallCollisions(newBalls, physics.ballRadius);
+        }
+
         return newBalls;
       });
 
@@ -196,25 +208,16 @@ export function PoolTable() {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [physics.friction, physics.tableMargin, physics.ballRadius]);
+  }, [physics.friction, physics.tableMargin, physics.ballRadius, draggedBallId]);
 
   // Trajectory line update
   useEffect(() => {
     if (shot.selectedBall !== null) {
       const ball = balls.find((b) => b.id === shot.selectedBall);
       if (ball) {
-        // Calculate predicted collisions
-        const collisions = predictCollisions(
-          ball,
-          balls,
-          shot.shotAngle,
-          shot.shotVelocity,
-          physics.ballRadius
-        );
-        setPredictedCollisions(collisions);
+        // Calculate predicted collisions for visualization
+        predictCollisions(ball, balls, shot.shotAngle, shot.shotVelocity, physics.ballRadius);
       }
-    } else {
-      setPredictedCollisions([]);
     }
   }, [shot.selectedBall, shot.shotAngle, shot.shotVelocity, balls, physics.ballRadius]);
 
@@ -231,12 +234,34 @@ export function PoolTable() {
     setBallCreation((prev) => ({ ...prev, [key]: value }));
   };
 
+  const handleAddPresetBall = (presetIndex: number) => {
+    const { x, y } = getRandomPosition(physics.tableMargin, physics.ballRadius);
+    const presetBall = POOL_BALL_COLORS[presetIndex];
+    const newBall: PoolBall = {
+      id: ballCreation.nextBallId,
+      number: presetIndex === 0 ? 0 : presetIndex,
+      color: presetBall.color,
+      type: presetBall.type,
+      x,
+      y,
+      vx: 0,
+      vy: 0,
+      radius: physics.ballRadius,
+    };
+    setBalls((prev) => [...prev, newBall]);
+    setBallCreation((prev) => ({
+      ...prev,
+      nextBallId: prev.nextBallId + 1,
+    }));
+  };
+
   const handleAddCustomBall = () => {
     const { x, y } = getRandomPosition(physics.tableMargin, physics.ballRadius);
     const newBall: PoolBall = {
       id: ballCreation.nextBallId,
       number: ballCreation.newBallNumber,
       color: ballCreation.newBallColor,
+      type: 'solid',
       x,
       y,
       vx: 0,
@@ -255,10 +280,12 @@ export function PoolTable() {
     const { x, y } = getRandomPosition(physics.tableMargin, physics.ballRadius);
     const { vx, vy } = getRandomVelocity(physics.ballSpeed);
     const randomColor = POOL_BALL_COLORS[Math.floor(Math.random() * POOL_BALL_COLORS.length)];
+    const isCueBall = randomColor === POOL_BALL_COLORS[0];
     const newBall: PoolBall = {
       id: ballCreation.nextBallId,
-      number: ballCreation.newBallNumber,
+      number: isCueBall ? 0 : ballCreation.newBallNumber,
       color: randomColor.color,
+      type: randomColor.type,
       x,
       y,
       vx,
@@ -269,20 +296,19 @@ export function PoolTable() {
     setBallCreation((prev) => ({
       ...prev,
       nextBallId: prev.nextBallId + 1,
-      newBallNumber: prev.newBallNumber + 1,
+      newBallNumber: isCueBall ? prev.newBallNumber : prev.newBallNumber + 1,
     }));
   };
 
-  const handleBallDrag = (ballId: number, newX: number, newY: number) => {
-    const margin = 5;
-    const constrainedX = Math.max(margin, Math.min(100 - margin, newX));
-    const constrainedY = Math.max(margin, Math.min(100 - margin, newY));
-
-    setBalls((prev) =>
-      prev.map((ball) =>
-        ball.id === ballId ? { ...ball, x: constrainedX, y: constrainedY } : ball
-      )
+  const handleBallDrag = (ballId: number, x: number, y: number) => {
+    setDraggedBallId(ballId);
+    setBalls((currentBalls) =>
+      currentBalls.map((ball) => (ball.id === ballId ? { ...ball, x, y, vx: 0, vy: 0 } : ball))
     );
+  };
+
+  const handleBallDragEnd = () => {
+    setDraggedBallId(null);
   };
 
   const handleBallClick = (ballId: number) => {
@@ -311,54 +337,117 @@ export function PoolTable() {
     setShot((prev) => ({ ...prev, selectedBall: null }));
   };
 
+  const handleRack = () => {
+    // Clear existing balls
+    setBalls([]);
+
+    // Get rack positions
+    const rackPositions = calculateRackPositions(physics.tableMargin, physics.ballRadius);
+
+    // Create new balls in rack formation
+    const newBalls: PoolBall[] = [];
+
+    // Add cue ball at the head of the table (25% from the left)
+    newBalls.push({
+      id: 0,
+      number: 0,
+      color: POOL_BALL_COLORS[0].color,
+      type: 'solid',
+      x: 25,
+      y: 50,
+      vx: 0,
+      vy: 0,
+      radius: physics.ballRadius,
+      racked: false, // Cue ball is not racked
+    });
+
+    // Add racked balls
+    // Shuffle the balls 1-15 (excluding 8-ball)
+    const ballNumbers = [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15];
+    for (let i = ballNumbers.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [ballNumbers[i], ballNumbers[j]] = [ballNumbers[j], ballNumbers[i]];
+    }
+
+    // Insert 8-ball in the middle of the rack (position 4)
+    ballNumbers.splice(4, 0, 8);
+
+    // Create balls with shuffled numbers
+    ballNumbers.forEach((number, index) => {
+      const ballColor = POOL_BALL_COLORS[number];
+      newBalls.push({
+        id: index + 1,
+        number,
+        color: ballColor.color,
+        type: ballColor.type,
+        x: rackPositions[index].x,
+        y: rackPositions[index].y,
+        vx: 0,
+        vy: 0,
+        radius: physics.ballRadius,
+        racked: true, // All racked balls start as racked
+      });
+    });
+
+    setBalls(newBalls);
+    setBallCreation((prev) => ({ ...prev, nextBallId: newBalls.length }));
+  };
+
   return (
     <div className="pool-table-container">
-      <ControlPanel
-        physics={physics}
-        shot={shot}
-        ballCreation={ballCreation}
-        onPhysicsChange={handlePhysicsChange}
-        onShotChange={handleShotChange}
-        onBallCreationChange={handleBallCreationChange}
-        onAddCustomBall={handleAddCustomBall}
-        onAddRandomBall={handleAddRandomBall}
-        onLaunch={handleLaunch}
-        draggingEnabled={draggingEnabled}
-        onDraggingToggle={setDraggingEnabled}
-      />
-      <div className="pool-table">
-        {POCKETS.map((pocket) => (
-          <div
-            key={pocket.id}
-            className="pocket"
-            style={{
-              left: `${pocket.x}%`,
-              top: `${pocket.y}%`,
-            }}
-          />
-        ))}
-        {shot.selectedBall !== null && (
-          <TrajectoryVisualization
-            selectedBall={balls.find((b) => b.id === shot.selectedBall) || null}
-            balls={balls}
-            shot={shot}
-            physics={physics}
-          />
-        )}
-        {balls.map((ball) => (
-          <Ball
-            key={ball.id}
-            number={ball.number}
-            color={ball.color}
-            x={ball.x}
-            y={ball.y}
-            radius={ball.radius}
-            onDrag={(x, y) => handleBallDrag(ball.id, x, y)}
-            draggingEnabled={draggingEnabled}
-            onClick={() => handleBallClick(ball.id)}
-            isSelected={ball.id === shot.selectedBall}
-          />
-        ))}
+      <h1 className="pool-table-title">simpool</h1>
+      <div className="pool-table-wrapper">
+        <div className="pool-table">
+          {POCKETS.map((pocket) => (
+            <div
+              key={pocket.id}
+              className="pocket"
+              style={{
+                left: `${pocket.x}%`,
+                top: `${pocket.y}%`,
+              }}
+            />
+          ))}
+          {shot.selectedBall !== null && (
+            <TrajectoryVisualization
+              selectedBall={balls.find((b) => b.id === shot.selectedBall) || null}
+              balls={balls}
+              shot={shot}
+              physics={physics}
+            />
+          )}
+          {balls.map((ball) => (
+            <Ball
+              key={ball.id}
+              number={ball.number}
+              color={ball.color}
+              type={ball.type}
+              x={ball.x}
+              y={ball.y}
+              radius={ball.radius}
+              onDrag={(x, y) => handleBallDrag(ball.id, x, y)}
+              onDragEnd={handleBallDragEnd}
+              draggingEnabled={draggingEnabled}
+              onClick={() => handleBallClick(ball.id)}
+              isSelected={shot.selectedBall === ball.id}
+            />
+          ))}
+        </div>
+        <ControlPanel
+          physics={physics}
+          shot={shot}
+          ballCreation={ballCreation}
+          onPhysicsChange={handlePhysicsChange}
+          onShotChange={handleShotChange}
+          onBallCreationChange={handleBallCreationChange}
+          onAddCustomBall={handleAddCustomBall}
+          onAddPresetBall={handleAddPresetBall}
+          onAddRandomBall={handleAddRandomBall}
+          onLaunch={handleLaunch}
+          draggingEnabled={draggingEnabled}
+          onDraggingToggle={setDraggingEnabled}
+          onRack={handleRack}
+        />
       </div>
     </div>
   );

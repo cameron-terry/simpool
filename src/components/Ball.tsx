@@ -3,10 +3,12 @@ import React, { useRef } from 'react';
 interface BallProps {
   number: number;
   color: string;
+  type: 'solid' | 'stripe';
   x: number;
   y: number;
   radius: number;
   onDrag: (x: number, y: number) => void;
+  onDragEnd: () => void;
   draggingEnabled: boolean;
   onClick: () => void;
   isSelected: boolean;
@@ -15,10 +17,12 @@ interface BallProps {
 export function Ball({
   number,
   color,
+  type,
   x,
   y,
   radius,
   onDrag,
+  onDragEnd,
   draggingEnabled,
   onClick,
   isSelected,
@@ -81,6 +85,7 @@ export function Ball({
       onDragStart={draggingEnabled ? handleDragStart : undefined}
       onDrag={draggingEnabled ? handleDrag : undefined}
       onDragOver={draggingEnabled ? handleDragOver : undefined}
+      onDragEnd={draggingEnabled ? onDragEnd : undefined}
       onClick={onClick}
       style={{
         position: 'absolute',
@@ -102,17 +107,35 @@ export function Ball({
         transition: 'box-shadow 0.2s ease',
       }}
     >
-      <span
-        style={{
-          color: 'white',
-          fontWeight: 'bold',
-          fontSize: '1em',
-          textShadow: '1px 1px 1px rgba(0,0,0,0.5)',
-          pointerEvents: 'none',
-        }}
-      >
-        {number}
-      </span>
+      {type === 'stripe' && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: 0,
+            right: 0,
+            height: '25%',
+            background: 'white',
+            transform: 'translateY(-50%)',
+            pointerEvents: 'none',
+            opacity: 0.9,
+          }}
+        />
+      )}
+      {number !== 0 && (
+        <span
+          style={{
+            color: 'white',
+            fontWeight: 'bold',
+            fontSize: '1em',
+            textShadow: '1px 1px 1px rgba(0,0,0,0.8)',
+            pointerEvents: 'none',
+            zIndex: 1,
+          }}
+        >
+          {number}
+        </span>
+      )}
     </div>
   );
 }

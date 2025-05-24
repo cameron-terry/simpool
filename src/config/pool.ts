@@ -40,4 +40,9 @@ export const DEFAULT_SHOT = {
   shotVelocity: 2.0,
 };
 
-export const COLLISION_THRESHOLD = 0.99; // 99% of minDist for collision detection
+// Threshold for actual collision physics (when balls should bounce off each other)
+export const COLLISION_THRESHOLD = 0.99;
+
+// Threshold for repulsion forces (when balls should start pushing each other apart)
+// This is much closer to 1.0 so balls only repel when they're very close to touching
+export const REPULSION_THRESHOLD = 0.9999;

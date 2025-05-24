@@ -8,11 +8,13 @@ export interface PoolBall {
   id: number;
   number: number;
   color: string;
+  type: 'solid' | 'stripe';
   x: number;
   y: number;
   vx: number;
   vy: number;
   radius: number;
+  racked?: boolean;
 }
 
 export interface TrajectoryLine {
