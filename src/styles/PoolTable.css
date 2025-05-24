@@ -40,9 +40,19 @@
   background: #2d5a27;
   border-radius: 20px;
   box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
   border: 20px solid #8b4513; /* Wooden border */
   box-sizing: border-box;
+}
+
+.head-string {
+  position: absolute;
+  left: 25%; /* Position at 1/4 of the table length */
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.5);
+  z-index: 1;
+  pointer-events: none;
 }
 
 .pool-table::before {
@@ -69,6 +79,44 @@
   transition: all 0.2s;
   z-index: 2;
   box-shadow: 0 0 0 6px #8b4513;
+}
+
+@keyframes pocket-flash {
+  0% {
+    background: #000;
+    box-shadow: 0 0 0 6px #8b4513;
+  }
+  50% {
+    background: #ffff00;
+    box-shadow: 0 0 0 6px #ffff00;
+  }
+  100% {
+    background: #000;
+    box-shadow: 0 0 0 6px #8b4513;
+  }
+}
+
+@keyframes pocket-flash-cue {
+  0% {
+    background: #000;
+    box-shadow: 0 0 0 6px #8b4513;
+  }
+  50% {
+    background: #ff0000;
+    box-shadow: 0 0 0 6px #ff0000;
+  }
+  100% {
+    background: #000;
+    box-shadow: 0 0 0 6px #8b4513;
+  }
+}
+
+.pocket.flashing {
+  animation: pocket-flash 0.3s ease-out;
+}
+
+.pocket.flashing-cue {
+  animation: pocket-flash-cue 0.3s ease-out;
 }
 
 .pocket:hover {
@@ -538,4 +586,27 @@ input[type='range']::-webkit-slider-thumb:hover {
 .sandbox-footer .toggle-label {
   justify-content: space-between;
   width: 100%;
+}
+
+.custom-ball-inputs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.ball-number-input {
+  width: 80px;
+  padding: 4px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.ball-color-input {
+  width: 50px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
 }

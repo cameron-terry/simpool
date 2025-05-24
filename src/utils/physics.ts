@@ -272,15 +272,23 @@ const predictSubsequentCollisions = (
   tableMargin: number,
   maxDepth: number = 3,
   currentDepth: number = 0,
-  predictedBalls: Set<number> = new Set() // Track which balls we've already predicted
+  predictedBalls: Set<number> = new Set(), // Track which balls we've already predicted
+  friction: number = 0.99 // Add friction parameter with a default value
 ): PredictedCollision[] => {
   if (currentDepth >= maxDepth) return [];
+
+  // Apply friction to current velocity
+  vx *= friction;
+  vy *= friction;
+
+  // If velocity is too small, stop predicting
+  const velocity = Math.sqrt(vx * vx + vy * vy);
+  if (velocity < 0.1) return [];
 
   // Add current ball to predicted set
   predictedBalls.add(ball.id);
 
   const collisions: PredictedCollision[] = [];
-  const velocity = Math.sqrt(vx * vx + vy * vy);
 
   // First check for wall collision
   const wallCollision = predictWallCollision(ball, vx, vy, tableMargin, ballRadius);
@@ -348,8 +356,8 @@ const predictSubsequentCollisions = (
     })
     .filter((collision): collision is NonNullable<typeof collision> => collision !== null);
 
-  // Sort all potential collisions by distance
-  const allCollisions = [
+  // Find the earliest collision (either wall or ball)
+  const earliestCollision = [
     ...(wallCollision
       ? [
           {
@@ -368,69 +376,111 @@ const predictSubsequentCollisions = (
         ]
       : []),
     ...ballCollisions,
-  ].sort((a, b) => a.distance - b.distance);
+  ].sort((a, b) => a.distance - b.distance)[0];
 
-  // Process collisions in order of distance
-  for (const collision of allCollisions) {
-    collisions.push(collision);
+  if (!earliestCollision) return collisions;
 
-    if (collision.isWallCollision) {
-      // Calculate reflected velocity for wall collision
-      const dotProduct = vx * wallCollision!.normalX + vy * wallCollision!.normalY;
-      const reflectedVx = vx - 2 * dotProduct * wallCollision!.normalX;
-      const reflectedVy = vy - 2 * dotProduct * wallCollision!.normalY;
+  // Add the earliest collision to our results
+  collisions.push(earliestCollision);
 
-      // Predict collisions after wall bounce, passing the same predictedBalls set
-      const subsequentCollisions = predictSubsequentCollisions(
-        { ...ball, x: collision.x, y: collision.y },
-        otherBalls,
-        reflectedVx,
-        reflectedVy,
+  if (earliestCollision.isWallCollision) {
+    // Calculate reflected velocity for wall collision
+    const dotProduct = vx * wallCollision!.normalX + vy * wallCollision!.normalY;
+    const reflectedVx = vx - 2 * dotProduct * wallCollision!.normalX;
+    const reflectedVy = vy - 2 * dotProduct * wallCollision!.normalY;
+
+    // Predict collisions after wall bounce
+    const subsequentCollisions = predictSubsequentCollisions(
+      { ...ball, x: earliestCollision.x, y: earliestCollision.y },
+      otherBalls,
+      reflectedVx,
+      reflectedVy,
+      ballRadius,
+      tableMargin,
+      maxDepth,
+      currentDepth + 1,
+      predictedBalls,
+      friction
+    );
+    collisions.push(...subsequentCollisions);
+  } else {
+    // For ball collisions, calculate new trajectory for both balls
+    const hitBall = otherBalls.find((b) => b.id === earliestCollision.collidedBallId);
+    if (hitBall) {
+      // Calculate new trajectory for the cue ball
+      const normalX = (earliestCollision.x - hitBall.x) / (ballRadius * 2);
+      const normalY = (earliestCollision.y - hitBall.y) / (ballRadius * 2);
+      const relativeVelocityX = vx;
+      const relativeVelocityY = vy;
+      const normalVelocity = relativeVelocityX * normalX + relativeVelocityY * normalY;
+      const newCueVx = relativeVelocityX - normalVelocity * normalX;
+      const newCueVy = relativeVelocityY - normalVelocity * normalY;
+
+      // Calculate new trajectory for the hit ball
+      const newHitVx = normalVelocity * normalX;
+      const newHitVy = normalVelocity * normalY;
+
+      // Predict subsequent collisions for the cue ball
+      const cueSubsequentCollisions = predictSubsequentCollisions(
+        { ...ball, x: earliestCollision.x, y: earliestCollision.y },
+        otherBalls.filter((b) => b.id !== hitBall.id),
+        newCueVx,
+        newCueVy,
         ballRadius,
         tableMargin,
         maxDepth,
         currentDepth + 1,
-        predictedBalls
+        predictedBalls,
+        friction
       );
-      collisions.push(...subsequentCollisions);
-      break; // Stop after wall collision as the original trajectory is no longer valid
-    } else {
-      // For ball collisions, predict subsequent collisions for the hit ball
-      const hitBall = otherBalls.find((b) => b.id === collision.collidedBallId);
-      if (hitBall) {
-        const subsequentCollisions = predictSubsequentCollisions(
-          hitBall,
-          otherBalls.filter((b) => b.id !== hitBall.id),
-          collision.collidedBallTrajectory.x2 - collision.collidedBallTrajectory.x1,
-          collision.collidedBallTrajectory.y2 - collision.collidedBallTrajectory.y1,
-          ballRadius,
-          tableMargin,
-          maxDepth,
-          currentDepth + 1,
-          predictedBalls
-        );
-        collisions.push(...subsequentCollisions);
-      }
+      collisions.push(...cueSubsequentCollisions);
+
+      // Predict subsequent collisions for the hit ball
+      const hitSubsequentCollisions = predictSubsequentCollisions(
+        { ...hitBall, x: earliestCollision.x, y: earliestCollision.y },
+        otherBalls.filter((b) => b.id !== ball.id),
+        newHitVx,
+        newHitVy,
+        ballRadius,
+        tableMargin,
+        maxDepth,
+        currentDepth + 1,
+        predictedBalls,
+        friction
+      );
+      collisions.push(...hitSubsequentCollisions);
     }
   }
 
   return collisions;
 };
 
-// Update the main predictCollisions function to use the new system
+// Update the main predictCollisions function to pass the friction parameter
 export const predictCollisions = (
   ball: PoolBall,
   otherBalls: PoolBall[],
   angle: number,
   velocity: number,
   ballRadius: number,
-  tableMargin: number
+  tableMargin: number,
+  friction: number = 0.99 // Add friction parameter with default value
 ): PredictedCollision[] => {
   const angleRad = (angle * Math.PI) / 180;
   const vx = Math.cos(angleRad) * velocity;
   const vy = Math.sin(angleRad) * velocity;
 
-  return predictSubsequentCollisions(ball, otherBalls, vx, vy, ballRadius, tableMargin);
+  return predictSubsequentCollisions(
+    ball,
+    otherBalls,
+    vx,
+    vy,
+    ballRadius,
+    tableMargin,
+    3,
+    0,
+    new Set(),
+    friction
+  );
 };
 
 // Calculate positions for a standard 8-ball rack

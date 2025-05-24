@@ -17,6 +17,8 @@ interface ControlPanelProps {
   draggingEnabled: boolean;
   onDraggingToggle: (enabled: boolean) => void;
   onRack: () => void;
+  autoSelectCueBall: boolean;
+  onAutoSelectCueBallToggle: (enabled: boolean) => void;
 }
 
 type BallCreationMode = 'preset' | 'custom';
@@ -35,6 +37,8 @@ export function ControlPanel({
   draggingEnabled,
   onDraggingToggle,
   onRack,
+  autoSelectCueBall,
+  onAutoSelectCueBallToggle,
 }: ControlPanelProps) {
   const [ballCreationMode, setBallCreationMode] = useState<BallCreationMode>('preset');
   const [selectedPresetBall, setSelectedPresetBall] = useState<number>(0);
@@ -61,7 +65,6 @@ export function ControlPanel({
         <button onClick={onRack} style={{ marginBottom: '10px' }}>
           Rack
         </button>
-        <h3>Add Ball</h3>
         <div className="control-group">
           <label className="toggle-label">
             <span className={ballCreationMode === 'preset' ? 'active' : ''}>Preset</span>
@@ -79,7 +82,6 @@ export function ControlPanel({
 
         {ballCreationMode === 'preset' ? (
           <div className="control-group">
-            <label>Select Ball:</label>
             <BallSelector
               balls={availableBalls}
               selectedBall={selectedPresetBall}
@@ -87,38 +89,24 @@ export function ControlPanel({
             />
           </div>
         ) : (
-          <>
-            <div className="control-group">
-              <label>Number:</label>
+          <div className="control-group">
+            <div className="custom-ball-inputs">
               <input
                 type="number"
                 value={ballCreation.newBallNumber}
                 onChange={(e) => onBallCreationChange('newBallNumber', Number(e.target.value))}
                 min="1"
+                placeholder="Number"
+                className="ball-number-input"
+              />
+              <input
+                type="color"
+                value={ballCreation.newBallColor}
+                onChange={(e) => onBallCreationChange('newBallColor', e.target.value)}
+                className="ball-color-input"
               />
             </div>
-            <div className="control-group">
-              <label>Color:</label>
-              <div className="color-picker-container">
-                <input
-                  type="color"
-                  value={ballCreation.newBallColor}
-                  onChange={(e) => onBallCreationChange('newBallColor', e.target.value)}
-                />
-                <select
-                  value={ballCreation.newBallColor}
-                  onChange={(e) => onBallCreationChange('newBallColor', e.target.value)}
-                  className="color-select"
-                >
-                  {availableBalls.map((ballColor) => (
-                    <option key={`${ballColor.type}-${ballColor.color}`} value={ballColor.color}>
-                      {ballColor.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </>
+          </div>
         )}
         <button onClick={handleAddBall}>
           {ballCreationMode === 'preset' ? 'Preset' : 'Custom'}
@@ -207,6 +195,19 @@ export function ControlPanel({
               value={physics.ballSpeed}
               onChange={(e) => onPhysicsChange('ballSpeed', Number(e.target.value))}
             />
+          </div>
+          <div className="control-group">
+            <label className="toggle-label">
+              <span>Auto-select Cue Ball</span>
+              <div className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={autoSelectCueBall}
+                  onChange={(e) => onAutoSelectCueBallToggle(e.target.checked)}
+                />
+                <span className="toggle-slider"></span>
+              </div>
+            </label>
           </div>
           <div className="control-group sandbox-footer">
             <label className="toggle-label">

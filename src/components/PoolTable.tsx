@@ -14,9 +14,8 @@ import {
 } from '../utils/physics';
 import '../styles/PoolTable.css';
 
-// Add these constants before the PoolTable component
-const CORNER_POCKET_RADIUS = 8;
-const MIDDLE_POCKET_RADIUS = 4;
+// Update these constants before the PoolTable component
+const POCKET_RADIUS = 8; // Single radius for all pockets
 
 // Update the PredictedCollision type to make collidedBallTrajectory required
 type PredictedCollision = {
@@ -34,15 +33,10 @@ type PredictedCollision = {
 };
 
 const isBallInPocket = (ball: PoolBall, pocket: { x: number; y: number }): boolean => {
-  // Determine if this is a corner pocket (x and y are at 0 or 100)
-  const isCornerPocket =
-    (pocket.x === 0 || pocket.x === 100) && (pocket.y === 0 || pocket.y === 100);
-  const pocketRadius = isCornerPocket ? CORNER_POCKET_RADIUS : MIDDLE_POCKET_RADIUS;
-
   const dx = ball.x - pocket.x;
   const dy = ball.y - pocket.y;
   const distance = Math.sqrt(dx * dx + dy * dy);
-  return distance < pocketRadius;
+  return distance < POCKET_RADIUS;
 };
 
 // Add function to predict collisions
@@ -246,6 +240,9 @@ export function PoolTable() {
   const [balls, setBalls] = useState<PoolBall[]>([]);
   const [draggingEnabled, setDraggingEnabled] = useState<boolean>(true);
   const [draggedBallId, setDraggedBallId] = useState<number | null>(null);
+  const [autoSelectCueBall, setAutoSelectCueBall] = useState<boolean>(true);
+  const [flashingPocketId, setFlashingPocketId] = useState<number | null>(null);
+  const [isCueBallPocketed, setIsCueBallPocketed] = useState<boolean>(false);
   const animationFrameRef = useRef<number | undefined>(undefined);
 
   // Physics state
@@ -269,6 +266,26 @@ export function PoolTable() {
     const updatePhysics = () => {
       setBalls((currentBalls) => {
         // First check for pocketed balls and remove them
+        const pocketedBalls = currentBalls.filter((ball) =>
+          POCKETS.some((pocket) => isBallInPocket(ball, pocket))
+        );
+
+        // If any balls were pocketed, trigger the flash animation
+        if (pocketedBalls.length > 0) {
+          // Find the pocket that the ball entered
+          const pocketedBall = pocketedBalls[0];
+          const pocket = POCKETS.find((p) => isBallInPocket(pocketedBall, p));
+          if (pocket) {
+            setFlashingPocketId(pocket.id);
+            setIsCueBallPocketed(pocketedBall.number === 0);
+            // Reset the flashing state after animation
+            setTimeout(() => {
+              setFlashingPocketId(null);
+              setIsCueBallPocketed(false);
+            }, 300);
+          }
+        }
+
         let newBalls = currentBalls.filter(
           (ball) => !POCKETS.some((pocket) => isBallInPocket(ball, pocket))
         );
@@ -330,6 +347,16 @@ export function PoolTable() {
     physics.ballRadius,
     physics.tableMargin,
   ]);
+
+  // Add effect to auto-select cue ball
+  useEffect(() => {
+    if (autoSelectCueBall && !shot.selectedBall) {
+      const cueBall = balls.find((ball) => ball.number === 0);
+      if (cueBall) {
+        setShot((prev) => ({ ...prev, selectedBall: cueBall.id }));
+      }
+    }
+  }, [autoSelectCueBall, balls, shot.selectedBall]);
 
   // Event handlers
   const handlePhysicsChange = (key: keyof PhysicsState, value: number) => {
@@ -508,10 +535,17 @@ export function PoolTable() {
       <h1 className="pool-table-title">simpool</h1>
       <div className="pool-table-wrapper">
         <div className="pool-table">
+          <div className="head-string" />
           {POCKETS.map((pocket) => (
             <div
               key={pocket.id}
-              className="pocket"
+              className={`pocket ${
+                flashingPocketId === pocket.id
+                  ? isCueBallPocketed
+                    ? 'flashing-cue'
+                    : 'flashing'
+                  : ''
+              }`}
               style={{
                 left: `${pocket.x}%`,
                 top: `${pocket.y}%`,
@@ -557,6 +591,8 @@ export function PoolTable() {
           draggingEnabled={draggingEnabled}
           onDraggingToggle={setDraggingEnabled}
           onRack={handleRack}
+          autoSelectCueBall={autoSelectCueBall}
+          onAutoSelectCueBallToggle={setAutoSelectCueBall}
         />
       </div>
     </div>
