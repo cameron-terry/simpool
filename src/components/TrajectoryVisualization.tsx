@@ -1,4 +1,3 @@
-import React from 'react';
 import type { PoolBall, PhysicsState, ShotState } from '../types/pool';
 import type { PredictedCollision } from '../utils/physics';
 import { calculateTrajectoryLine, predictCollisions } from '../utils/physics';

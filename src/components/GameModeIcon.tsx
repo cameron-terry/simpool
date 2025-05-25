@@ -1,4 +1,3 @@
-import React from 'react';
 import type { GameMode } from '../types/pool';
 import sandboxIcon from '../assets/sandbox_icon.svg';
 import golfFlagIcon from '../assets/golf_flag_mound_icon.svg';

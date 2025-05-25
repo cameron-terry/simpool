@@ -1,4 +1,3 @@
-import React from 'react';
 import type { BallColor } from '../types/pool';
 
 interface BallSelectorProps {

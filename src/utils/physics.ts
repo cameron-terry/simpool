@@ -484,10 +484,7 @@ export const predictCollisions = (
 };
 
 // Calculate positions for a standard 8-ball rack
-export function calculateRackPositions(
-  tableMargin: number,
-  ballRadius: number
-): { x: number; y: number }[] {
+export function calculateRackPositions(ballRadius: number): { x: number; y: number }[] {
   // The rack is positioned at 75% of the table length (from the left)
   // and centered vertically
   const rackCenterX = 75;

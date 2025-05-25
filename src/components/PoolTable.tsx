@@ -544,7 +544,7 @@ export function PoolTable() {
     setBalls([]);
 
     // Get rack positions
-    const rackPositions = calculateRackPositions(physics.tableMargin, physics.ballRadius);
+    const rackPositions = calculateRackPositions(physics.ballRadius);
 
     // Create new balls in rack formation
     const newBalls: PoolBall[] = [];
