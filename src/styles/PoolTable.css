@@ -136,9 +136,9 @@
   flex-direction: column;
   gap: 20px;
   width: 250px;
-  height: 600px;
+  height: 650px;
   flex-shrink: 0;
-  padding: 15px;
+  padding: 20px;
   background: #f5f5f5;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -609,4 +609,159 @@ input[type='range']::-webkit-slider-thumb:hover {
   border: 1px solid #ddd;
   border-radius: 4px;
   cursor: pointer;
+}
+
+.golf-stats {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  margin: 10px 0;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  height: 40px; /* Fixed height to prevent layout shifts */
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+}
+
+.golf-stats.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.golf-stats.hidden {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.golf-stats.complete {
+  background: rgba(76, 175, 80, 0.2);
+  border: 2px solid #4caf50;
+  animation: complete-pulse 1s ease-out;
+}
+
+.golf-stat {
+  font-size: 16px;
+  font-weight: 500;
+  color: #333;
+  transition: all 0.3s ease;
+}
+
+.golf-stats.complete .golf-stat {
+  color: #2d5a27;
+  font-weight: 600;
+}
+
+.golf-stat span:first-child {
+  color: #666;
+  margin-right: 5px;
+  transition: color 0.3s ease;
+}
+
+.golf-stats.complete .golf-stat span:first-child {
+  color: #4caf50;
+}
+
+@keyframes complete-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.4);
+  }
+  50% {
+    transform: scale(1.02);
+    box-shadow: 0 0 0 10px rgba(76, 175, 80, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+  }
+}
+
+.golf-complete {
+  font-size: 18px;
+  font-weight: bold;
+  color: #4caf50;
+  text-align: center;
+  margin-top: 10px;
+  padding: 10px;
+  background: rgba(76, 175, 80, 0.1);
+  border-radius: 4px;
+}
+
+.game-mode-controls {
+  padding-bottom: 20px;
+  border-bottom: 1px solid #ddd;
+  margin-bottom: 20px;
+}
+
+.game-mode-controls h3 {
+  margin: 0 0 15px 0;
+  font-size: 16px;
+  color: #333;
+}
+
+.golf-controls {
+  padding: 20px 0;
+  border-bottom: 1px solid #ddd;
+  margin-bottom: 20px;
+}
+
+.golf-controls h3 {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  color: #333;
+}
+
+.golf-controls p {
+  margin: 0 0 15px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.golf-controls button {
+  width: 100%;
+  background: #2196f3;
+}
+
+.golf-controls button:hover:not(:disabled) {
+  background: #1976d2;
+}
+
+.golf-controls button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.mode-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #666;
+  transition: all 0.2s ease;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.mode-label.active {
+  color: #4caf50;
+  font-weight: bold;
+  background: rgba(76, 175, 80, 0.1);
+}
+
+.mode-icon {
+  width: 20px;
+  height: 20px;
+  transition: transform 0.2s ease;
+  filter: brightness(0.7); /* Make icons slightly darker by default */
+}
+
+.mode-label:hover .mode-icon {
+  transform: scale(1.1);
+  filter: brightness(0.8);
+}
+
+.mode-label.active .mode-icon {
+  filter: brightness(1) sepia(100%) saturate(1000%) hue-rotate(90deg); /* Make active icon green */
 }

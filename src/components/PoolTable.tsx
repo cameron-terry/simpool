@@ -2,7 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Ball } from './Ball';
 import { ControlPanel } from './ControlPanel';
 import { TrajectoryVisualization } from './TrajectoryVisualization';
-import type { PoolBall, PhysicsState, ShotState, BallCreationState } from '../types/pool';
+import type {
+  PoolBall,
+  PhysicsState,
+  ShotState,
+  BallCreationState,
+  GameMode,
+  GolfGameState,
+} from '../types/pool';
 import { POCKETS, DEFAULT_PHYSICS, DEFAULT_SHOT, POOL_BALL_COLORS } from '../config/pool';
 import {
   updateBallPositions,
@@ -235,6 +242,9 @@ const predictCollisions = (
   return [...wallCollisions, ...ballCollisions].sort((a, b) => a.distance - b.distance);
 };
 
+// Add constant for cue ball initial position
+const CUE_BALL_INITIAL_POSITION = { x: 25, y: 50 };
+
 export function PoolTable() {
   // State management
   const [balls, setBalls] = useState<PoolBall[]>([]);
@@ -244,6 +254,14 @@ export function PoolTable() {
   const [flashingPocketId, setFlashingPocketId] = useState<number | null>(null);
   const [isCueBallPocketed, setIsCueBallPocketed] = useState<boolean>(false);
   const animationFrameRef = useRef<number | undefined>(undefined);
+  const [gameMode, setGameMode] = useState<GameMode>('normal');
+  const [golfState, setGolfState] = useState<GolfGameState>({
+    isActive: false,
+    startTime: null,
+    endTime: null,
+    shots: 0,
+    isComplete: false,
+  });
 
   // Physics state
   const [physics, setPhysics] = useState<PhysicsState>(DEFAULT_PHYSICS);
@@ -277,7 +295,23 @@ export function PoolTable() {
           const pocket = POCKETS.find((p) => isBallInPocket(pocketedBall, p));
           if (pocket) {
             setFlashingPocketId(pocket.id);
-            setIsCueBallPocketed(pocketedBall.number === 0);
+            const isCueBall = pocketedBall.number === 0;
+            setIsCueBallPocketed(isCueBall);
+
+            // If it's the cue ball, reset it to initial position
+            if (isCueBall) {
+              // Remove the pocketed cue ball and add a new one at the initial position
+              const remainingBalls = currentBalls.filter((ball) => ball.number !== 0);
+              const resetCueBall: PoolBall = {
+                ...pocketedBall,
+                x: CUE_BALL_INITIAL_POSITION.x,
+                y: CUE_BALL_INITIAL_POSITION.y,
+                vx: 0,
+                vy: 0,
+              };
+              return [...remainingBalls, resetCueBall];
+            }
+
             // Reset the flashing state after animation
             setTimeout(() => {
               setFlashingPocketId(null);
@@ -357,6 +391,30 @@ export function PoolTable() {
       }
     }
   }, [autoSelectCueBall, balls, shot.selectedBall]);
+
+  // Effect to handle golf mode game completion
+  useEffect(() => {
+    if (gameMode === 'golf' && golfState.isActive && !golfState.isComplete) {
+      const nonCueBalls = balls.filter((ball) => ball.number !== 0);
+      if (nonCueBalls.length === 0) {
+        setGolfState((prev) => ({
+          ...prev,
+          isComplete: true,
+          endTime: Date.now(),
+        }));
+      }
+    }
+  }, [balls, gameMode, golfState.isActive, golfState.isComplete]);
+
+  // Effect to start golf mode timer
+  useEffect(() => {
+    if (gameMode === 'golf' && golfState.isActive && !golfState.startTime) {
+      setGolfState((prev) => ({
+        ...prev,
+        startTime: Date.now(),
+      }));
+    }
+  }, [gameMode, golfState.isActive, golfState.startTime]);
 
   // Event handlers
   const handlePhysicsChange = (key: keyof PhysicsState, value: number) => {
@@ -458,6 +516,13 @@ export function PoolTable() {
   const handleLaunch = () => {
     if (shot.selectedBall === null) return;
 
+    if (gameMode === 'golf' && golfState.isActive) {
+      setGolfState((prev) => ({
+        ...prev,
+        shots: prev.shots + 1,
+      }));
+    }
+
     setBalls((prev) =>
       prev.map((ball) => {
         if (ball.id === shot.selectedBall) {
@@ -495,11 +560,10 @@ export function PoolTable() {
       vx: 0,
       vy: 0,
       radius: physics.ballRadius,
-      racked: false, // Cue ball is not racked
+      racked: false,
     });
 
     // Add racked balls
-    // Shuffle the balls 1-15 (excluding 8-ball)
     const ballNumbers = [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15];
     for (let i = ballNumbers.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -522,17 +586,72 @@ export function PoolTable() {
         vx: 0,
         vy: 0,
         radius: physics.ballRadius,
-        racked: true, // All racked balls start as racked
+        racked: true,
       });
     });
 
     setBalls(newBalls);
     setBallCreation((prev) => ({ ...prev, nextBallId: newBalls.length }));
+
+    // Reset golf state if in golf mode
+    if (gameMode === 'golf') {
+      setGolfState({
+        isActive: true,
+        startTime: null,
+        endTime: null,
+        shots: 0,
+        isComplete: false,
+      });
+    }
+  };
+
+  // Add function to toggle game mode
+  const handleGameModeToggle = (mode: GameMode) => {
+    setGameMode(mode);
+    if (mode === 'golf') {
+      setGolfState({
+        isActive: true,
+        startTime: null,
+        endTime: null,
+        shots: 0,
+        isComplete: false,
+      });
+      handleRack(); // Automatically rack balls when entering golf mode
+    } else {
+      setGolfState({
+        isActive: false,
+        startTime: null,
+        endTime: null,
+        shots: 0,
+        isComplete: false,
+      });
+    }
   };
 
   return (
     <div className="pool-table-container">
       <h1 className="pool-table-title">simpool</h1>
+      <div
+        className={`golf-stats ${gameMode === 'golf' && golfState.isActive ? 'visible' : 'hidden'} ${
+          golfState.isComplete ? 'complete' : ''
+        }`}
+      >
+        <div className="golf-stat">
+          <span>Time: </span>
+          <span>
+            {golfState.startTime && !golfState.isComplete
+              ? Math.floor((Date.now() - golfState.startTime) / 1000)
+              : golfState.endTime && golfState.startTime
+                ? Math.floor((golfState.endTime - golfState.startTime) / 1000)
+                : 0}
+            s
+          </span>
+        </div>
+        <div className="golf-stat">
+          <span>Shots: </span>
+          <span>{golfState.shots}</span>
+        </div>
+      </div>
       <div className="pool-table-wrapper">
         <div className="pool-table">
           <div className="head-string" />
@@ -593,6 +712,9 @@ export function PoolTable() {
           onRack={handleRack}
           autoSelectCueBall={autoSelectCueBall}
           onAutoSelectCueBallToggle={setAutoSelectCueBall}
+          gameMode={gameMode}
+          onGameModeToggle={handleGameModeToggle}
+          golfState={golfState}
         />
       </div>
     </div>

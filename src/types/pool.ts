@@ -48,3 +48,13 @@ export interface BallCreationState {
   newBallColor: string;
   nextBallId: number;
 }
+
+export type GameMode = 'normal' | 'golf';
+
+export interface GolfGameState {
+  isActive: boolean;
+  startTime: number | null;
+  endTime: number | null;
+  shots: number;
+  isComplete: boolean;
+}

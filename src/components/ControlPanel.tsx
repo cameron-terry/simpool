@@ -1,7 +1,14 @@
 import React, { useState } from 'react';
-import type { PhysicsState, ShotState, BallCreationState } from '../types/pool';
+import type {
+  PhysicsState,
+  ShotState,
+  BallCreationState,
+  GameMode,
+  GolfGameState,
+} from '../types/pool';
 import { POOL_BALL_COLORS } from '../config/pool';
 import { BallSelector } from './BallSelector';
+import { GameModeIcon } from './GameModeIcon';
 
 interface ControlPanelProps {
   physics: PhysicsState;
@@ -19,6 +26,9 @@ interface ControlPanelProps {
   onRack: () => void;
   autoSelectCueBall: boolean;
   onAutoSelectCueBallToggle: (enabled: boolean) => void;
+  gameMode: GameMode;
+  onGameModeToggle: (mode: GameMode) => void;
+  golfState: GolfGameState;
 }
 
 type BallCreationMode = 'preset' | 'custom';
@@ -39,6 +49,9 @@ export function ControlPanel({
   onRack,
   autoSelectCueBall,
   onAutoSelectCueBallToggle,
+  gameMode,
+  onGameModeToggle,
+  golfState,
 }: ControlPanelProps) {
   const [ballCreationMode, setBallCreationMode] = useState<BallCreationMode>('preset');
   const [selectedPresetBall, setSelectedPresetBall] = useState<number>(0);
@@ -60,59 +73,95 @@ export function ControlPanel({
 
   return (
     <div className="control-panel">
-      <div className="ball-creation-controls">
-        <h3>Game Controls</h3>
-        <button onClick={onRack} style={{ marginBottom: '10px' }}>
-          Rack
-        </button>
+      <div className="game-mode-controls">
+        <h3>Game Mode</h3>
         <div className="control-group">
           <label className="toggle-label">
-            <span className={ballCreationMode === 'preset' ? 'active' : ''}>Preset</span>
+            <span className={`mode-label ${gameMode === 'normal' ? 'active' : ''}`}>
+              <GameModeIcon mode="normal" className="mode-icon" />
+              Normal
+            </span>
             <div className="toggle-switch">
               <input
                 type="checkbox"
-                checked={ballCreationMode === 'custom'}
-                onChange={(e) => setBallCreationMode(e.target.checked ? 'custom' : 'preset')}
+                checked={gameMode === 'golf'}
+                onChange={(e) => onGameModeToggle(e.target.checked ? 'golf' : 'normal')}
               />
               <span className="toggle-slider"></span>
             </div>
-            <span className={ballCreationMode === 'custom' ? 'active' : ''}>Custom</span>
+            <span className={`mode-label ${gameMode === 'golf' ? 'active' : ''}`}>
+              <GameModeIcon mode="golf" className="mode-icon" />
+              Golf
+            </span>
           </label>
         </div>
+      </div>
 
-        {ballCreationMode === 'preset' ? (
+      {gameMode === 'normal' && (
+        <div className="ball-creation-controls">
+          <h3>Game Controls</h3>
+          <button onClick={onRack} style={{ marginBottom: '10px' }}>
+            Rack
+          </button>
           <div className="control-group">
-            <BallSelector
-              balls={availableBalls}
-              selectedBall={selectedPresetBall}
-              onSelectBall={setSelectedPresetBall}
-            />
+            <label className="toggle-label">
+              <span className={ballCreationMode === 'preset' ? 'active' : ''}>Preset</span>
+              <div className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={ballCreationMode === 'custom'}
+                  onChange={(e) => setBallCreationMode(e.target.checked ? 'custom' : 'preset')}
+                />
+                <span className="toggle-slider"></span>
+              </div>
+              <span className={ballCreationMode === 'custom' ? 'active' : ''}>Custom</span>
+            </label>
           </div>
-        ) : (
-          <div className="control-group">
-            <div className="custom-ball-inputs">
-              <input
-                type="number"
-                value={ballCreation.newBallNumber}
-                onChange={(e) => onBallCreationChange('newBallNumber', Number(e.target.value))}
-                min="1"
-                placeholder="Number"
-                className="ball-number-input"
-              />
-              <input
-                type="color"
-                value={ballCreation.newBallColor}
-                onChange={(e) => onBallCreationChange('newBallColor', e.target.value)}
-                className="ball-color-input"
+
+          {ballCreationMode === 'preset' ? (
+            <div className="control-group">
+              <BallSelector
+                balls={availableBalls}
+                selectedBall={selectedPresetBall}
+                onSelectBall={setSelectedPresetBall}
               />
             </div>
-          </div>
-        )}
-        <button onClick={handleAddBall}>
-          {ballCreationMode === 'preset' ? 'Preset' : 'Custom'}
-        </button>
-        <button onClick={onAddRandomBall}>Random</button>
-      </div>
+          ) : (
+            <div className="control-group">
+              <div className="custom-ball-inputs">
+                <input
+                  type="number"
+                  value={ballCreation.newBallNumber}
+                  onChange={(e) => onBallCreationChange('newBallNumber', Number(e.target.value))}
+                  min="1"
+                  placeholder="Number"
+                  className="ball-number-input"
+                />
+                <input
+                  type="color"
+                  value={ballCreation.newBallColor}
+                  onChange={(e) => onBallCreationChange('newBallColor', e.target.value)}
+                  className="ball-color-input"
+                />
+              </div>
+            </div>
+          )}
+          <button onClick={handleAddBall}>
+            {ballCreationMode === 'preset' ? 'Preset' : 'Custom'}
+          </button>
+          <button onClick={onAddRandomBall}>Random</button>
+        </div>
+      )}
+
+      {gameMode === 'golf' && (
+        <div className="golf-controls">
+          <h3>Golf Mode</h3>
+          <p>Clear all balls (except cue ball) in as few shots as possible!</p>
+          <button onClick={onRack} disabled={golfState.isActive && !golfState.isComplete}>
+            New Game
+          </button>
+        </div>
+      )}
 
       <div className="shot-controls">
         <h3>Shot Controls</h3>
