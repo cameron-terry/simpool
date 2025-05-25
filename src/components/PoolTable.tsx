@@ -628,6 +628,40 @@ export function PoolTable() {
     }
   };
 
+  const handleWheel = (e: React.WheelEvent) => {
+    if (shot.selectedBall === null) return; // Only change angle if a ball is selected
+
+    // Prevent default scrolling behavior
+    e.preventDefault();
+
+    // Use 1 degree steps when middle mouse button is pressed, 5 degrees otherwise
+    const STEP_SIZE = e.buttons === 4 ? 1 : 5; // 4 is the middle mouse button
+    const direction = e.deltaY > 0 ? 1 : -1; // 1 for counter-clockwise, -1 for clockwise
+
+    setShot((prev) => {
+      // Calculate the current step
+      const currentStep = Math.round(prev.shotAngle / STEP_SIZE);
+      // Calculate the new step, wrapping around at the appropriate number of steps
+      const totalSteps = 360 / STEP_SIZE;
+      const newStep = (currentStep + direction + totalSteps) % totalSteps;
+      // Convert back to angle
+      const newAngle = newStep * STEP_SIZE;
+
+      return {
+        ...prev,
+        shotAngle: newAngle,
+      };
+    });
+  };
+
+  const formatTime = (ms: number): string => {
+    const totalSeconds = ms / 1000;
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = Math.floor(totalSeconds % 60);
+    const tenths = Math.floor((totalSeconds % 1) * 10);
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${tenths}`;
+  };
+
   return (
     <div className="pool-table-container">
       <h1 className="pool-table-title">simpool</h1>
@@ -640,11 +674,10 @@ export function PoolTable() {
           <span>Time: </span>
           <span>
             {golfState.startTime && !golfState.isComplete
-              ? Math.floor((Date.now() - golfState.startTime) / 1000)
+              ? formatTime(Date.now() - golfState.startTime)
               : golfState.endTime && golfState.startTime
-                ? Math.floor((golfState.endTime - golfState.startTime) / 1000)
-                : 0}
-            s
+                ? formatTime(golfState.endTime - golfState.startTime)
+                : '00:00.0'}
           </span>
         </div>
         <div className="golf-stat">
@@ -653,7 +686,7 @@ export function PoolTable() {
         </div>
       </div>
       <div className="pool-table-wrapper">
-        <div className="pool-table">
+        <div className="pool-table" onWheel={handleWheel}>
           <div className="head-string" />
           {POCKETS.map((pocket) => (
             <div
